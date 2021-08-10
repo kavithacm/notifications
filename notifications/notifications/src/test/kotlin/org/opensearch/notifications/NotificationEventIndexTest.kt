@@ -1,34 +1,41 @@
 package org.opensearch.notifications.index
 
-import org.junit.jupiter.api.Test
-import org.mockito.Mock
-import org.opensearch.action.get.GetRequest
-import org.opensearch.client.Client
-import org.opensearch.cluster.service.ClusterService
-import org.opensearch.notifications.settings.PluginSettings
-import org.junit.jupiter.api.BeforeEach
-import com.nhaarman.mockitokotlin2.whenever
 import com.nhaarman.mockitokotlin2.any
-import com.nhaarman.mockitokotlin2.mock
+import com.nhaarman.mockitokotlin2.whenever
 import junit.framework.Assert.assertEquals
+import org.apache.logging.log4j.Logger
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.mockito.Mockito.*
-import org.mockito.MockitoAnnotations
-import org.mockito.stubbing.OngoingStubbing
 import org.opensearch.action.ActionFuture
 import org.opensearch.action.admin.indices.create.CreateIndexResponse
+import org.opensearch.action.get.GetRequest
 import org.opensearch.action.get.GetResponse
 import org.opensearch.action.support.master.AcknowledgedResponse
 import org.opensearch.client.AdminClient
+import org.opensearch.client.Client
 import org.opensearch.client.IndicesAdminClient
 import org.opensearch.cluster.ClusterState
 import org.opensearch.cluster.routing.RoutingTable
+import org.opensearch.cluster.service.ClusterService
+import org.opensearch.common.collect.MapBuilder
+import org.opensearch.common.settings.Setting
+import org.opensearch.common.settings.Settings
+import org.opensearch.common.unit.ByteSizeValue
+import org.opensearch.common.util.concurrent.ThreadContext
+import org.opensearch.common.util.concurrent.ThreadContext.StoredContext
+//import org.opensearch.common.util.concurrent.ThreadContext.ThreadContextStruct
 import org.opensearch.commons.notifications.model.*
+import org.opensearch.http.HttpTransportSettings
 import org.opensearch.notifications.model.DocInfo
 import org.opensearch.notifications.model.DocMetadata
 import org.opensearch.notifications.model.NotificationEventDoc
 import org.opensearch.notifications.model.NotificationEventDocInfo
+import org.opensearch.notifications.util.SecureIndexClient
+import org.opensearch.threadpool.ThreadPool
 import java.time.Instant
+import java.util.stream.Collector
 
 
 internal class NotificationEventIndexTest{
@@ -46,8 +53,11 @@ internal class NotificationEventIndexTest{
     fun setUp() {
         client = mock(Client::class.java,"client")
         clusterService = mock(ClusterService::class.java, "clusterservice")
+        //val secureIndexClient = mock(SecureIndexClient::class.java)
+        //whenever(SecureIndexClient(client)).thenReturn(secureIndexClient)
         NotificationEventIndex.initialize(client, clusterService)
     }
+
 
     @Test
     fun `index operation to get single event` () {
@@ -79,11 +89,11 @@ internal class NotificationEventIndexTest{
         val eventDoc = NotificationEventDoc(metadata, sampleEvent)
         val expectedEventDocInfo = NotificationEventDocInfo(docInfo, eventDoc)
 
-        val getRequest = GetRequest(INDEX_NAME).id(id)
-        val mockActionFuture:ActionFuture<GetResponse> = mock(ActionFuture::class.java) as ActionFuture<GetResponse>
+       // val getRequest = GetRequest(INDEX_NAME).id(id)
+        //val mockActionFuture:ActionFuture<GetResponse> = mock(ActionFuture::class.java) as ActionFuture<GetResponse>
         //whenever(NotificationEventIndex.client.get(any())).thenReturn(mockActionFuture)
 
-        whenever(client.get(getRequest)).thenReturn(mockActionFuture)
+        //whenever(client.get(getRequest)).thenReturn(mockActionFuture)
         val clusterState = mock(ClusterState::class.java)
 
         whenever(clusterService.state()).thenReturn(clusterState)
@@ -97,6 +107,8 @@ internal class NotificationEventIndexTest{
 
         //val actionFuture = NotificationEventIndex.client.admin().indices().create(request)
 
+
+
         val admin = mock(AdminClient::class.java)
         val indices = mock(IndicesAdminClient::class.java)
         val mockCreateClient:ActionFuture<CreateIndexResponse>  = mock(ActionFuture::class.java) as ActionFuture<CreateIndexResponse>
@@ -106,17 +118,39 @@ internal class NotificationEventIndexTest{
         whenever(indices.create(any())).thenReturn(mockCreateClient)
 
         //val time = PluginSettings.operationTimeoutMs
-        val mockActionGet = mockCreateClient.actionGet(PluginSettings.operationTimeoutMs)
+        val mockActionGet = mock(CreateIndexResponse::class.java)
+
+           // mockCreateClient.actionGet(PluginSettings.operationTimeoutMs)
         whenever(mockCreateClient.actionGet(anyLong())).thenReturn(mockActionGet)
         println("mockActionGet: $mockActionGet")
-        println("mockCreateClient: $mockCreateClient")
+
+        //println("mockCreateClient: $mockCreateClient")
         //println("plugin timout: $time")
 
-        //val mockResponse = mock(AcknowledgedResponse::class.java)
-        //whenever(response.isAcknowledged).thenReturn(mockResponse)
+        val mockResponse = mock(AcknowledgedResponse::class.java)
+
+        //whenever(mockActionGet.isAcknowledged).thenReturn(mockResponse.isAcknowledged)
+        //whenever(mockActionGet.isAcknowledged).thenReturn(mockResponse)
+        //when(mockActionGet.isAcknowledged).thenReturn(true)
+        //doReturn(true).when(mockActionGet).isAcknowledged()
+        //Mockito.`when`(mockActionGet.isAcknowledged()).thenReturn(true)
+
+        val getRequest = GetRequest(INDEX_NAME).id(id)
+        val mockActionFuture:ActionFuture<GetResponse> = mock(ActionFuture::class.java) as ActionFuture<GetResponse>
+        //whenever(client.get(any())).thenReturn(mockActionFuture)
+
+        //client = mock(SecureIndexClient::class.java)
+        println("Mock action Future: $mockActionFuture")
+        whenever(client.get(getRequest)).thenReturn(mockActionFuture)
+        val mockThreadPool = mock(ThreadPool::class.java)
+        val mockThreadContext = mock(ThreadContext::class.java)
+
+        whenever(client.threadPool()).thenReturn(mockThreadPool)
+        whenever(mockThreadPool.threadContext).thenReturn(mockThreadContext)
+        whenever(client.get(getRequest)).thenReturn(mockActionFuture)
 
         val actualEventDocInfo = NotificationEventIndex.getNotificationEvent(id)
-        verify(clusterService.state(), atLeast(1))
+        //verify(clusterService.state(), atLeast(1))
         verify(mockCreateClient.actionGet(), atLeast(1))
         //verifyNoMoreInteractions()
 
